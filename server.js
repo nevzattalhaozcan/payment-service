@@ -32,34 +32,14 @@ app.post('/payment', async (req, res) => {
       amount: req.body.basketItems.reduce((sum, item) => sum + Number(item.price), 0),
     });
 
-    const {
-      paymentChannel,
-      installment,
-      currency,
-      basketItems,
-      paymentCard,
-      customer,
-      shippingAddress,
-      billingAddress,
-    } = req.body;
+    const { paymentChannel, installment, currency, basketItems, paymentCard, customer, shippingAddress, billingAddress } = req.body;
 
     if (!paymentChannel || !installment || !currency) {
       return res.status(400).send('paymentChannel, installment and currency are required');
     }
 
-    if (
-      !customer.id ||
-      !customer.name ||
-      !customer.surname ||
-      !customer.email ||
-      !customer.phone ||
-      !customer.registrationAddress ||
-      !customer.city ||
-      !customer.country
-    ) {
-      return res
-        .status(400)
-        .send('customer id, name, surname, email, phone, registrationAddress, city and country are required');
+    if (!customer.id || !customer.name || !customer.surname || !customer.email || !customer.phone || !customer.registrationAddress || !customer.city || !customer.country) {
+      return res.status(400).send('customer id, name, surname, email, phone, registrationAddress, city and country are required');
     }
 
     let totalPrice = 0;
@@ -70,13 +50,7 @@ app.post('/payment', async (req, res) => {
       totalPrice += Number(item.price);
     });
 
-    if (
-      !paymentCard.cardHolderName ||
-      !paymentCard.cardNumber ||
-      !paymentCard.expireMonth ||
-      !paymentCard.expireYear ||
-      !paymentCard.cvc
-    ) {
+    if (!paymentCard.cardHolderName || !paymentCard.cardNumber || !paymentCard.expireMonth || !paymentCard.expireYear || !paymentCard.cvc) {
       return res
         .status(400)
         .send('paymentCard cardHolderName, cardNumber, expireMonth, expireYear and cvc are required');
@@ -110,10 +84,7 @@ app.post('/payment', async (req, res) => {
     };
 
     const config = createIyzicoRequestConfig(uriPath, requestBody);
-    console.log('Iyzico Request Config:', {
-      headers: config.headers,
-      url: `${IYZICO_BASE_URL}${uriPath}`,
-    });
+    console.log('Attempting to connect to Iyzico:', `${IYZICO_BASE_URL}${uriPath}`);
 
     const response = await axios.post(`${IYZICO_BASE_URL}${uriPath}`, requestBody, config);
 
@@ -141,10 +112,34 @@ app.post('/payment', async (req, res) => {
     );
     return res.status(200).send(response.data);
   } catch (error) {
-    res.status(error.response?.status || 500).json({
-      error: 'Payment processing failed',
-      details: error || error.message,
+    console.error('Payment Error:', {
+      code: error.code,
+      message: error.message,
+      response: error.response?.data,
+      url: error.config?.url,
     });
+
+    let errorMessage = 'Payment processing failed';
+    let statusCode = 500;
+
+    if (error.code === 'ECONNREFUSED') {
+      errorMessage = 'Cannot connect to payment service. Please try again later.';
+      statusCode = 503;
+    } else if (error.response) {
+      errorMessage = error.response.data?.errorMessage || errorMessage;
+      statusCode = error.response.status;
+    }
+
+    res.status(statusCode).json({
+      error: errorMessage,
+      details: {
+        code: error.code,
+        message: error.message,
+      },
+    });
+
+    // Report to Sentry
+    Sentry.captureException(error);
   }
 });
 
