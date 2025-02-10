@@ -118,15 +118,6 @@ app.post('/payment', async (req, res) => {
     const response = await axios.post(`${IYZICO_BASE_URL}${uriPath}`, requestBody, config);
 
     if (response.data.status === 'failure') {
-      Sentry.captureMessage('Iyzico payment failed', {
-        extra: {
-          errorCode: response.data.errorCode,
-          errorMessage: response.data.errorMessage,
-          requestBody: requestBody,
-        },
-        level: 'error',
-      });
-
       return res.status(400).json({
         errorCode: response.data.errorCode,
         errorMessage: response.data.errorMessage,
@@ -150,43 +141,10 @@ app.post('/payment', async (req, res) => {
     );
     return res.status(200).send(response.data);
   } catch (error) {
-    // Enhanced error logging
-    console.error('Payment Error Details:', {
-      message: error.message,
-      stack: error.stack,
-      axiosError: {
-        response: error.response?.data,
-        status: error.response?.status,
-        headers: error.response?.headers,
-      },
-      config: error.config,
+    res.status(error.response?.status || 500).json({
+      error: 'Payment processing failed',
+      details: error || error.message,
     });
-
-    Sentry.captureException(error, {
-      extra: {
-        requestBody: req.body,
-        errorDetails: {
-          message: error.message,
-          response: error.response?.data,
-          status: error.response?.status,
-        },
-      },
-    });
-
-    const errorResponse = {
-      error: 'payment processing failed',
-      details: error.response?.data || error.message,
-      code: error.response?.status || 500,
-      technical_details:
-        process.env.NODE_ENV === 'development'
-          ? {
-              message: error.message,
-              stack: error.stack,
-            }
-          : undefined,
-    };
-
-    res.status(errorResponse.code).json(errorResponse);
   }
 });
 
