@@ -14,7 +14,7 @@ app.use(morgan('dev'));
 app.use(cors());
 app.use(express.json());
 Sentry.init({
-  dsn: "https://8ebd7e51166e0b16f3bcf9e80261489d@o4508794983481345.ingest.de.sentry.io/4508794989117520",
+  dsn: process.env.SENTRY_DSN,
   // Tracing
   tracesSampleRate: 1.0, //  Capture 100% of the transactions
 });
