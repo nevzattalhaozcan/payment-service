@@ -6,6 +6,8 @@ const morgan = require('morgan');
 const cors = require('cors');
 const app = express();
 const Sentry = require("@sentry/node");
+const { pool } = require('./db');
+const { v4: uuidv4 } = require('uuid');
 
 const IYZICO_BASE_URL = process.env.IYZICO_BASE_URL;
 
@@ -23,8 +25,6 @@ Sentry.setupExpressErrorHandler(app);
 /// ROUTES
 app.post('/payment', async (req, res) => {
   const {
-    conversationId,
-    basketId,
     paymentChannel,
     installment,
     currency,
@@ -79,6 +79,8 @@ app.post('/payment', async (req, res) => {
   const discount = 0;
   customer.identityNumber = customer.identityNumber || '74300864791';
   customer.ip = customer.ip || '85.34.78.112';
+  const conversationId = uuidv4();
+  const basketId = uuidv4();
 
   const netPrice = parseFloat((totalPrice + vat + shippingPrice - discount).toFixed(2));
   const uriPath = '/payment/auth';
@@ -109,6 +111,22 @@ app.post('/payment', async (req, res) => {
         errorMessage: response.data.errorMessage,
       });
     }
+
+    await pool.query(
+      'INSERT INTO payments (amount, payment_date, user_id, status, method, iyzico_payment_id, conversation_id, basket_id, iyzico_payment_transaction_id, iyzico_raw_response) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)',
+      [
+        response.data.paidPrice,
+        new Date(),
+        customer.id,
+        'pending',
+        'credit_card',
+        response.data.paymentId,
+        response.data.conversationId,
+        response.data.basketId,
+        response.data.itemTransactions[0].paymentTransactionId,
+        JSON.stringify(response.data),
+      ]
+    );
     return res.status(200).send(response.data);
   } catch (error) {
     res.status(error.response?.status || 500).json({
