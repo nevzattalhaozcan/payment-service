@@ -5,6 +5,7 @@ const { createIyzicoRequestConfig } = require('./requestHelper');
 const morgan = require('morgan');
 const cors = require('cors');
 const app = express();
+const Sentry = require("@sentry/node");
 
 const IYZICO_BASE_URL = process.env.IYZICO_BASE_URL;
 
@@ -12,6 +13,12 @@ const IYZICO_BASE_URL = process.env.IYZICO_BASE_URL;
 app.use(morgan('dev'));
 app.use(cors());
 app.use(express.json());
+Sentry.init({
+  dsn: "https://8ebd7e51166e0b16f3bcf9e80261489d@o4508794983481345.ingest.de.sentry.io/4508794989117520",
+  // Tracing
+  tracesSampleRate: 1.0, //  Capture 100% of the transactions
+});
+Sentry.setupExpressErrorHandler(app);
 
 /// ROUTES
 app.post('/payment', async (req, res) => {
