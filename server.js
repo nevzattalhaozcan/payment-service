@@ -5,7 +5,7 @@ const { createIyzicoRequestConfig } = require('./requestHelper');
 const morgan = require('morgan');
 const cors = require('cors');
 const app = express();
-const Sentry = require("@sentry/node");
+const Sentry = require('@sentry/node');
 const { pool } = require('./db');
 const { v4: uuidv4 } = require('uuid');
 
@@ -106,6 +106,15 @@ app.post('/payment', async (req, res) => {
     const response = await axios.post(`${IYZICO_BASE_URL}${uriPath}`, requestBody, config);
 
     if (response.data.status === 'failure') {
+      Sentry.captureMessage('Iyzico payment failed', {
+        extra: {
+          errorCode: response.data.errorCode,
+          errorMessage: response.data.errorMessage,
+          requestBody: requestBody,
+        },
+        level: 'error',
+      });
+
       return res.status(400).json({
         errorCode: response.data.errorCode,
         errorMessage: response.data.errorMessage,
@@ -129,10 +138,23 @@ app.post('/payment', async (req, res) => {
     );
     return res.status(200).send(response.data);
   } catch (error) {
-    res.status(error.response?.status || 500).json({
-      error: 'payment processing failed',
-      details: error.message,
+    // Capture the error in Sentry
+    Sentry.captureException(error, {
+      extra: {
+        requestBody: req.body,
+        errorDetails: error.response?.data || error.message,
+      },
     });
+
+    // Improved error response
+    const errorResponse = {
+      error: 'payment processing failed',
+      details: error.response?.data || error.message,
+      code: error.response?.status || 500,
+    };
+
+    console.error('Payment Error:', errorResponse);
+    res.status(error.response?.status || 500).json(errorResponse);
   }
 });
 
