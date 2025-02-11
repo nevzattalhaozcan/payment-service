@@ -23,68 +23,59 @@ Sentry.init({
 Sentry.setupExpressErrorHandler(app);
 
 /// ROUTES
+// Create payment
 app.post('/payment', async (req, res) => {
+  const { paymentChannel, installment, currency, basketItems, paymentCard, customer, shippingAddress, billingAddress } = req.body;
+
+  if (!paymentChannel || !installment || !currency) {
+    return res.status(400).send('paymentChannel, installment and currency are required');
+  }
+
+  if (!customer.id || !customer.name || !customer.surname || !customer.email || !customer.phone || !customer.registrationAddress || !customer.city || !customer.country) {
+    return res.status(400).send('customer id, name, surname, email, phone, registrationAddress, city and country are required');
+  }
+
+  let totalPrice = 0;
+  basketItems.forEach((item) => {
+    if (!item.id || !item.name || !item.price || !item.category1) {
+      return res.status(400).send('basketItems id, name, category1 and price are required');
+    }
+    totalPrice += Number(item.price);
+  });
+
+  if (!paymentCard.cardHolderName || !paymentCard.cardNumber || !paymentCard.expireMonth || !paymentCard.expireYear || !paymentCard.cvc) {
+    return res.status(400).send('paymentCard cardHolderName, cardNumber, expireMonth, expireYear and cvc are required');
+  }
+
+  const vat = parseFloat((totalPrice * 0.18).toFixed(2));
+  const shippingPrice = 0;
+  const discount = 0;
+  customer.identityNumber = customer.identityNumber || '74300864791';
+  customer.ip = customer.ip || '85.34.78.112';
+  const conversationId = uuidv4();
+  const basketId = uuidv4();
+
+  const netPrice = parseFloat((totalPrice + vat + shippingPrice - discount).toFixed(2));
+  const uriPath = '/payment/auth';
+  const requestBody = {
+    locale: 'tr',
+    conversationId: conversationId,
+    price: totalPrice,
+    paidPrice: netPrice,
+    installment,
+    paymentChannel,
+    basketId: basketId,
+    paymentGroup: 'PRODUCT',
+    paymentCard,
+    buyer: customer,
+    shippingAddress,
+    billingAddress,
+    basketItems,
+    currency,
+  };
+
   try {
-    // Add request logging
-    console.log('Payment Request:', {
-      url: `${IYZICO_BASE_URL}/payment/auth`,
-      customer: req.body.customer,
-      amount: req.body.basketItems.reduce((sum, item) => sum + Number(item.price), 0),
-    });
-
-    const { paymentChannel, installment, currency, basketItems, paymentCard, customer, shippingAddress, billingAddress } = req.body;
-
-    if (!paymentChannel || !installment || !currency) {
-      return res.status(400).send('paymentChannel, installment and currency are required');
-    }
-
-    if (!customer.id || !customer.name || !customer.surname || !customer.email || !customer.phone || !customer.registrationAddress || !customer.city || !customer.country) {
-      return res.status(400).send('customer id, name, surname, email, phone, registrationAddress, city and country are required');
-    }
-
-    let totalPrice = 0;
-    basketItems.forEach((item) => {
-      if (!item.id || !item.name || !item.price || !item.category1) {
-        return res.status(400).send('basketItems id, name, category1 and price are required');
-      }
-      totalPrice += Number(item.price);
-    });
-
-    if (!paymentCard.cardHolderName || !paymentCard.cardNumber || !paymentCard.expireMonth || !paymentCard.expireYear || !paymentCard.cvc) {
-      return res
-        .status(400)
-        .send('paymentCard cardHolderName, cardNumber, expireMonth, expireYear and cvc are required');
-    }
-
-    const vat = parseFloat((totalPrice * 0.18).toFixed(2));
-    const shippingPrice = 0;
-    const discount = 0;
-    customer.identityNumber = customer.identityNumber || '74300864791';
-    customer.ip = customer.ip || '85.34.78.112';
-    const conversationId = uuidv4();
-    const basketId = uuidv4();
-
-    const netPrice = parseFloat((totalPrice + vat + shippingPrice - discount).toFixed(2));
-    const uriPath = '/payment/auth';
-    const requestBody = {
-      locale: 'tr',
-      conversationId: conversationId,
-      price: totalPrice,
-      paidPrice: netPrice,
-      installment,
-      paymentChannel,
-      basketId: basketId,
-      paymentGroup: 'PRODUCT',
-      paymentCard,
-      buyer: customer,
-      shippingAddress,
-      billingAddress,
-      basketItems,
-      currency,
-    };
-
     const config = createIyzicoRequestConfig(uriPath, requestBody);
-    console.log('Attempting to connect to Iyzico:', `${IYZICO_BASE_URL}${uriPath}`);
 
     const response = await axios.post(`${IYZICO_BASE_URL}${uriPath}`, requestBody, config);
 
@@ -96,7 +87,8 @@ app.post('/payment', async (req, res) => {
     }
 
     await pool.query(
-      'INSERT INTO payments (amount, payment_date, user_id, status, method, iyzico_payment_id, conversation_id, basket_id, iyzico_payment_transaction_id, iyzico_raw_response) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)',
+      `INSERT INTO payments (amount, payment_date, user_id, status, method, iyzico_payment_id, conversation_id, basket_id, iyzico_payment_transaction_id, iyzico_raw_response) 
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
       [
         response.data.paidPrice,
         new Date(),
@@ -111,38 +103,22 @@ app.post('/payment', async (req, res) => {
       ]
     );
     return res.status(200).send(response.data);
+
   } catch (error) {
-    console.error('Payment Error:', {
-      code: error.code,
-      message: error.message,
-      response: error.response?.data,
-      url: error.config?.url,
-    });
-
-    let errorMessage = 'Payment processing failed';
-    let statusCode = 500;
-
     if (error.code === 'ECONNREFUSED') {
-      errorMessage = 'Cannot connect to payment service. Please try again later.';
-      statusCode = 503;
-    } else if (error.response) {
-      errorMessage = error.response.data?.errorMessage || errorMessage;
-      statusCode = error.response.status;
+      console.log('Database connection refused:', error);
+      return res.status(500).json({ message: 'Database connection refused.' });
     }
-
-    res.status(statusCode).json({
-      error: errorMessage,
-      details: {
-        code: error.code,
-        message: error.message,
-      },
+    res.status(error.response?.status || 500).json({
+      error: 'Payment processing failed',
+      details: error.message || response.data.errorMessage,
+      errorCode: error.response?.data.errorCode,
     });
-
-    // Report to Sentry
-    Sentry.captureException(error);
   }
+
 });
 
+// Get payment
 app.get('/payment', async (req, res) => {
   const { paymentId, ip, locale, conversationId, paymentConversationId } = req.body;
   const uriPath = '/payment/detail';
@@ -177,6 +153,7 @@ app.get('/payment', async (req, res) => {
   }
 });
 
+// Refund payment
 app.post('/payment/refund', async (req, res) => {
   const { paymentTransactionId, price, conversationId, locale } = req.body;
   const uriPath = '/payment/refund';
@@ -210,6 +187,7 @@ app.post('/payment/refund', async (req, res) => {
   }
 });
 
+// Cancel payment
 app.post('/payment/cancel', async (req, res) => {
   const { paymentId, conversationId, locale } = req.body;
   const uriPath = '/payment/cancel';
