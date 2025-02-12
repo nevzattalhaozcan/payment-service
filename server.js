@@ -35,6 +35,9 @@ app.post('/payment', async (req, res) => {
     return res.status(400).send('customer id, name, surname, email, phone, registrationAddress, city and country are required');
   }
 
+  // TODO: Check if customer exists
+  // TODO: Return customer_id if exist, create a new id if not exist
+
   let totalPrice = 0;
   basketItems.forEach((item) => {
     if (!item.id || !item.name || !item.price || !item.category1) {
@@ -102,7 +105,20 @@ app.post('/payment', async (req, res) => {
         JSON.stringify(response.data),
       ]
     );
-    return res.status(200).send(response.data);
+    return res.status(200).json({
+      status: response.data.status,
+      conversationId: response.data.conversationId,
+      price: response.data.price,
+      paidPrice: response.data.paidPrice,
+      installment: response.data.installment,
+      paymentId: response.data.paymentId,
+      itemTransactions: Array.isArray(response.data.itemTransactions) ? response.data.itemTransactions.map((item) => ({
+        itemId: item.itemId,
+        paymentTransactionId: item.paymentTransactionId,
+        price: item.price,
+        paidPrice: item.paidPrice,
+      })) : [],
+    });
 
   } catch (error) {
     if (error.code === 'ECONNREFUSED') {
@@ -118,7 +134,7 @@ app.post('/payment', async (req, res) => {
 
 });
 
-// Get payment
+// Get payment created before
 app.get('/payment', async (req, res) => {
   const { paymentId, ip, locale, conversationId, paymentConversationId } = req.body;
   const uriPath = '/payment/detail';
