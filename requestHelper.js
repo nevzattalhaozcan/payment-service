@@ -55,6 +55,10 @@ function validateSignature(payload, signatureHeader) {
     .update(keyString)
     .digest('hex');
 
+  console.log('Generated signature:', generatedSignature);
+  console.log('Signature header:', signatureHeader);
+  console.log('Payload:', payload);  
+
   return generatedSignature === signatureHeader;
 }
 
