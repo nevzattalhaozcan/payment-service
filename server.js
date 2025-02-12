@@ -239,7 +239,7 @@ app.post('/payment/cancel', async (req, res) => {
 
 // Webhook endpoint
 app.post('/webhook/iyzico', (req, res) => {
-  const signatureHeader = req.headers['x-iyz-signature-v3'];
+  const signatureHeader = req.headers['X-Iyz-Signature-V3'];
   const payload = req.body;
 
   const isValid = validateSignature(payload, signatureHeader);
