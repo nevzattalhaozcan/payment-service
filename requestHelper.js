@@ -48,7 +48,6 @@ function validateSignature(payload, signatureHeader) {
   const keyString = secretKey +
     payload.iyziEventType +
     payload.iyziPaymentId +
-    payload.token +
     payload.paymentConversationId +
     payload.status;
 
