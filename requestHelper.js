@@ -60,7 +60,7 @@ function validateSignature(payload, signatureHeader) {
 
 async function updateOrderStatus(paymentConversationId, status) {
   try {
-    const result = await pool.query('SELECT * FROM payments WHERE payment_conversation_id = $1', [paymentConversationId]);
+    const result = await pool.query('SELECT * FROM payments WHERE conversation_id = $1', [paymentConversationId]);
     const payment = result.rows[0];
     if (!payment) {
       console.log('Sipariş bulunamadı!');
@@ -68,7 +68,7 @@ async function updateOrderStatus(paymentConversationId, status) {
     }
 
     const newStatus = status === 'SUCCESS' ? 'completed' : 'failed';
-    await pool.query('UPDATE payments SET status = $1 WHERE payment_conversation_id = $2', [newStatus, paymentConversationId]);
+    await pool.query('UPDATE payments SET status = $1 WHERE conversation_id = $2', [newStatus, paymentConversationId]);
 
     console.log(`Sipariş durumu güncellendi: ${newStatus}`);
   } catch (error) {
