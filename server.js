@@ -1,7 +1,7 @@
 require('dotenv').config();
 const express = require('express');
 const axios = require('axios');
-const { createIyzicoRequestConfig } = require('./requestHelper');
+const { createIyzicoRequestConfig, validateSignature, updateOrderStatus } = require('./requestHelper');
 const morgan = require('morgan');
 const cors = require('cors');
 const app = express();
@@ -234,6 +234,41 @@ app.post('/payment/cancel', async (req, res) => {
       error: 'payment cancel failed',
       details: error.message,
     });
+  }
+});
+
+// Webhook endpoint
+app.post('/webhook/iyzico', (req, res) => {
+  const signatureHeader = req.headers['x-iyz-signature-v3'];
+  const payload = req.body;
+
+  const isValid = validateSignature(payload, signatureHeader);
+
+  if (isValid) {
+      const status = payload.status;
+      const paymentConversationId = payload.paymentConversationId;
+      const paymentId = payload.paymentId;
+
+      switch(status) {
+          case 'SUCCESS':
+              console.log(`Ödeme başarılı. Sipariş ID: ${paymentConversationId}`);
+              updateOrderStatus(paymentConversationId, status);
+              break;
+          case 'FAILURE':
+              console.log(`Ödeme başarısız. Sipariş ID: ${paymentConversationId}`);
+              updateOrderStatus(paymentConversationId, status);
+              break;
+          case 'PENDING_CREDIT':
+              console.log(`Kredi işlemi beklemede. Sipariş ID: ${paymentConversationId}`);
+              updateOrderStatus(paymentConversationId, status);
+              break;
+          default:
+              console.log(`Bilinmeyen durum: ${status}`);
+      }
+      res.status(200).send('OK');
+  } else {
+      console.log('Doğrulama başarısız!');
+      res.status(400).send('Invalid signature');
   }
 });
 
