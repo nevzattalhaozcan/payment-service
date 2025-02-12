@@ -242,6 +242,8 @@ app.post('/webhook/iyzico', (req, res) => {
   const signatureHeader = req.headers['X-Iyz-Signature-V3'];
   const payload = req.body;
 
+  console.log('Tüm Gelen Headerlar:', req.headers);
+
   const isValid = validateSignature(payload, signatureHeader);
 
   if (isValid) {
