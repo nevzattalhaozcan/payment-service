@@ -136,8 +136,9 @@ app.post('/payment', async (req, res) => {
 
 // Get payment created before
 app.get('/payment', async (req, res) => {
-  const { paymentId, ip, locale, conversationId, paymentConversationId } = req.body;
+  const { paymentId, locale, conversationId, paymentConversationId } = req.body;
   const uriPath = '/payment/detail';
+  const ip = '85.34.78.112';
   if (!paymentId || !ip || !conversationId) {
     return res.status(400).send('paymentId, ip and conversationId are required');
   }
