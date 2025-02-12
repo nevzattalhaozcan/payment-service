@@ -53,11 +53,7 @@ function validateSignature(payload, signatureHeader) {
 
   const generatedSignature = crypto.createHmac('sha256', secretKey)
     .update(keyString)
-    .digest('hex');
-
-  console.log('Generated signature:', generatedSignature);
-  console.log('Signature header:', signatureHeader);
-  console.log('Payload:', payload);  
+    .digest('hex');  
 
   return generatedSignature === signatureHeader;
 }
